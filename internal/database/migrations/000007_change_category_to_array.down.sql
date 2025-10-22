@@ -1,0 +1,2 @@
+ALTER TABLE products
+ALTER COLUMN category TYPE VARCHAR(100) USING category[1];
