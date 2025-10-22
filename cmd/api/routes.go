@@ -57,3 +57,7 @@ func (app *application) routes() http.Handler {
 // GET    /v1/payments/:id             # Get payment details
 
 // GET    /v1/healthcheck              # API health status
+<<<<<<< HEAD
+=======
+
+>>>>>>> 2dd28d239237303fa4d7c7aea01c9de49dda4fc6
