@@ -58,27 +58,3 @@ func (app *application) routes() http.Handler {
 
 // GET    /v1/healthcheck              # API health status
 
-// fashion=# SELECT * FROM users where id = 13;
-// -[ RECORD 1 ]-+---------------------------------------------------------------------------------------------------------------------------
-// id            | 13
-// email         | pau4@example.com
-// password_hash | \x243261243132246a7a6d71524c4d4f42424271754233366430686a584f544d305a45764a46324a6235366f6434786642614e6b31387a6e756a316e71
-// name          | paul four
-// avatar_url    |
-// activated     | f
-// created_at    | 2025-10-20 14:25:46+01
-// updated_at    | 2025-10-20 14:25:46+01
-// version       | 1
-// {"token": "ICTLTRWXESSNFX3KQSIBSYGSS4"}
-
-// BODY='{"name":"Ice money","description":"richies cloths","price":43333.00,
-// "image_url":"http://google.com","stock":50,"category":["men","boy"]}'
-// curl -i -X POST -H "Content-Type: application/json" -H "Authorization: Bearer 2QTDZ7RI3SMRJUKCDAEUSHBWHU" -d "$BODY" localhost:4000/v1/products
-
-//  curl -X POST -H "Content-Type: application/json" -d '{"email": "pau5@example.com", "password": "Pa55word"}' localhost:4000/v1/tokens/authentication{
-//         "authentication token": {
-//                 "token": "IPWOF6PLODNYOOCD3D23DXWP6U",
-//                 "expiry": "2025-10-23T12:59:21.4757788+01:00",
-//                 "created_at": "2025-10-22T12:59:21.4757788+01:00"
-//         }
-// }
