@@ -1,0 +1,9 @@
+
+// GET    /api/v1/products               // List products (with filters)
+// GET    /api/v1/products/:id           // Get product details
+// POST   /api/v1/products               // Create product (seller/admin)
+// PUT    /api/v1/products/:id           // Update product
+// DELETE /api/v1/products/:id           // Delete product
+// GET    /api/v1/products/search        // Search products
+// GET    /api/v1/products/bestsellers   // Get best sellers
+// GET    /api/v1/products/categories    // Get categories

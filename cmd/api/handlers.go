@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/PaulBabatuyi/FashionMarket-Backend/internal/data"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/pkg/validator"
@@ -87,10 +88,14 @@ func (app *application) showProductHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Get the authenticated user from the context
+	// Get the authenticated user
 	user := app.contextGetUser(r)
-	if user == nil {
+	if user.IsAnonymous() || user.ID == 0 {
 		app.authenticationRequiredResponse(w, r)
+		return
+	}
+	if !user.Activated {
+		app.inactiveAccountResponse(w, r)
 		return
 	}
 
@@ -142,6 +147,7 @@ func (app *application) updateProductHandler(w http.ResponseWriter, r *http.Requ
 		ImageUrl    *string     `json:"image_url"`
 		Stock       *int32      `json:"stock"`
 		Category    []string    `json:"category"`
+		UpdatedAt   *time.Time  `json:"updated_at"`
 	}
 
 	err = app.readJSON(w, r, &input)
@@ -167,6 +173,9 @@ func (app *application) updateProductHandler(w http.ResponseWriter, r *http.Requ
 	}
 	if input.Category != nil {
 		product.Category = input.Category
+	}
+	if input.UpdatedAt != nil {
+		product.UpdatedAt = *input.UpdatedAt
 	}
 
 	v := validator.New()

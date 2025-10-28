@@ -27,7 +27,7 @@ func (app *application) routes() http.Handler {
 	router.MethodFunc(http.MethodDelete, "/v1/products/{id}", app.deleteProductHandler)
 
 	router.MethodFunc(http.MethodPost, "/v1/users", app.registerUserHandler)
-	router.MethodFunc(http.MethodPut, "/v1/users/activated", app.activateUserHandler)
+	router.MethodFunc(http.MethodPatch, "/v1/users/activated", app.activateUserHandler)
 	router.MethodFunc(http.MethodPost, "/v1/tokens/authentication", app.createAuthenticationTokenHandler)
 
 	// Return the Chi router, which implements http.Handler
@@ -57,7 +57,3 @@ func (app *application) routes() http.Handler {
 // GET    /v1/payments/:id             # Get payment details
 
 // GET    /v1/healthcheck              # API health status
-<<<<<<< HEAD
-=======
-
->>>>>>> 2dd28d239237303fa4d7c7aea01c9de49dda4fc6
