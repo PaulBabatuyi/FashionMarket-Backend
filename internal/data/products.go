@@ -156,22 +156,21 @@ func (m ProductModel) Update(product *Product) error {
 
 	query := `
 	UPDATE products
-	SET name = $1, description = $2, price = $3, image_url = $4, stock = $5 category = $6, version = version + 1
-	WHERE id = $7, AND version = $8
+	SET name = $1, description = $2, price = $3, image_url = $4, stock = $5, category = $6, updated_at = $7, version = version + 1
+	WHERE id = $8 AND user_id = $9 AND version = $10
 	RETURNING version`
 
 	args := []interface{}{
-		&product.ID,
-		&product.UserId,
-		&product.Name,
-		&product.Description,
-		&product.Price,
-		&product.ImageUrl,
-		&product.Stock,
-		pq.Array(&product.Category),
-		&product.CreatedAt,
-		&product.UpdatedAt,
-		&product.Version,
+		product.Name,
+		product.Description,
+		product.Price,
+		product.ImageUrl,
+		product.Stock,
+		pq.Array(product.Category),
+		product.UpdatedAt,
+		product.ID,
+		product.UserId,
+		product.Version,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -198,10 +197,11 @@ func (m ProductModel) Delete(id int64) error {
 
 	query := `
 	DELETE FROM products
-	WHERE id = $1 AND user_id = $2`
+	WHERE id = $1`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+
 	// Use ExecContext() and pass the context as the first argument.
 	result, err := m.DB.ExecContext(ctx, query, id)
 	if err != nil {
