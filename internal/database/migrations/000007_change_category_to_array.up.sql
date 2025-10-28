@@ -1,2 +1,0 @@
-ALTER TABLE products
-ALTER COLUMN category TYPE TEXT[] USING ARRAY[category];
