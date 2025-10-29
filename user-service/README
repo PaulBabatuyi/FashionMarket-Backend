@@ -1,0 +1,104 @@
+# Fashion Market - User Service
+
+Microservice handling user authentication and management for Fashion Market.
+
+## Features
+
+- User registration with email activation
+- token-based authentication
+- Password reset functionality
+- Permission-based authorization
+- Rate limiting
+- Graceful shutdown
+
+## Setup
+
+### Prerequisites
+- Go 1.25+
+- PostgreSQL 15+
+- Docker & Docker Compose (optional)
+
+### Environment Variables
+
+Create a `.env` file:
+```bash
+FASHIONUSERS_DB_DSN=postgres://user:pass@localhost/fashionusers?sslmode=disable
+SMTP_USERNAME=your_smtp_username
+SMTP_PASSWORD=your_smtp_password
+SMTP_SENDER=Fashion <noreply@fashion.com>
+```
+
+### Database Migrations
+```bash
+# Install migrate tool
+go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+# Run migrations
+migrate -path ./migrations -database "${FASHIONUSERS_DB_DSN}" up
+```
+
+### Run Locally
+```bash
+# Load environment variables
+export $(cat .env | xargs)
+
+# Run service
+go run ./cmd/api
+```
+
+### Run with Docker
+```bash
+docker-compose up --build
+```
+
+## API Endpoints
+
+### Public
+- `POST /v1/auth/register` - Register new user
+- `POST /v1/auth/me` - Login (get auth token)
+- `PATCH /v1/auth/activate` - Activate account
+- `POST /v1/tokens/activation` - Request new activation token
+- `POST /v1/tokens/password-reset` - Request password reset
+- `PUT /v1/users/password` - Reset password
+
+### Protected
+- `GET /v1/users/{id}` - Get user details (requires `products:read` permission)
+
+### System
+- `GET /v1/healthcheck` - Health status
+- `GET /debug/vars` - Metrics (expvar)
+
+## Configuration Flags
+```bash
+-port=4000                    # Server port
+-env=development              # Environment
+-db-dsn=<connection_string>   # Database connection
+-limiter-rps=2                # Rate limit requests/second
+-limiter-burst=4              # Rate limit burst
+-cors-trusted-origins=<urls>  # CORS allowed origins
+```
+
+## Architecture
+```
+user-service/
+├── cmd/api/              # HTTP handlers and server
+├── internal/
+│   ├── data/            # Database models
+│   ├── jsonlog/         # Structured logging
+│   ├── mailer/          # Email service
+│   └── validator/       # Input validation
+└── migrations/          # Database migrations
+```
+
+## Security
+
+- Passwords hashed with bcrypt (cost 12)
+- Tokens use SHA-256 hashing
+- Rate limiting enabled by default
+- CORS protection
+- Input validation
+- SQL injection protection via parameterized queries
+
+## License
+
+MIT
