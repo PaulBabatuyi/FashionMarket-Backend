@@ -64,7 +64,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// / Add the "movies:read" permission for the new user.
-	err = app.models.Permissions.AddForUser(user.ID, "movies:read")
+	err = app.models.Permissions.AddForUser(user.ID, "products:read")
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
