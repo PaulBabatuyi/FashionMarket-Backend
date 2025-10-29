@@ -2,17 +2,12 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/data"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/validator"
 )
-
-func token() {
-	fmt.Println("fmt")
-}
 
 func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
