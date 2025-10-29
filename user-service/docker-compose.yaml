@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  user-service:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      FASHIONUSERS_DB_DSN: postgres://fashionuser:fashionpass@postgres:5432/fashionusers?sslmode=disable
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_SENDER: ${SMTP_SENDER}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: [
+      "./user-service",
+      "-db-dsn=${FASHIONUSERS_DB_DSN}",
+      "-smtp-username=${SMTP_USERNAME}",
+      "-smtp-password=${SMTP_PASSWORD}",
+      "-smtp-sender=${SMTP_SENDER}"
+    ]
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: fashionusers
+      POSTGRES_PASSWORD: pa55word
+      POSTGRES_DB: fashionusers
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-RETRY", "pg_isready", "-U", "fashionuser"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:

@@ -93,9 +93,9 @@ func main() {
 	// with your own Mailtrap credentials.
 	flag.StringVar(&cfg.smtp.host, "smtp-host", "sandbox.smtp.mailtrap.io", "SMTP host")
 	flag.IntVar(&cfg.smtp.port, "smtp-port", 2525, "SMTP port")
-	flag.StringVar(&cfg.smtp.username, "smtp-username", "ade7bda6c9c382", "SMTP username")
-	flag.StringVar(&cfg.smtp.password, "smtp-password", "79b61b2090591d", "SMTP password")
-	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Fashion <pauloluwadamilare912@gamil.com>", "SMTP sender")
+	flag.StringVar(&cfg.smtp.username, "smtp-username", os.Getenv("SMTP_USERNAME"), "SMTP username")
+	flag.StringVar(&cfg.smtp.password, "smtp-password", os.Getenv("SMTP_PASSWORD"), "SMTP password")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", os.Getenv("SMTP_SENDER"), "SMTP sender")
 
 	// Use the flag.Func() function to process the -cors-trusted-origins command line
 	// flag. In this we use the strings.Fields() function to split the flag value into a
