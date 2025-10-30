@@ -27,17 +27,16 @@ func (app *application) createProductHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get the authenticated user
-
-	// user := app.contextGetUser(r)
-	// if user.IsAnonymous() || user.ID == 0 {
-	// 	app.authenticationRequiredResponse(w, r)
-	// 	return
-	// }
-	// if !user.Activated {
-	// 	app.inactiveAccountResponse(w, r)
-	// 	return
-	// }
+	user := app.contextGetUser(r)
+	// Get the authenticated user;  although a app.requireActivatedUser middleware will check for auth
+	if user.IsAnonymous() {
+		app.authenticationRequiredResponse(w, r)
+		return
+	}
+	if !user.Activated {
+		app.inactiveAccountResponse(w, r)
+		return
+	}
 
 	// Log user_id for debugging
 	// app.logger.PrintInfo("Creating product", map[string]string{
@@ -64,7 +63,7 @@ func (app *application) createProductHandler(w http.ResponseWriter, r *http.Requ
 
 	if data.ValidateProduct(v, product); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
-
+		return
 	}
 
 	err = app.models.Products.Insert(product)
@@ -73,7 +72,7 @@ func (app *application) createProductHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	headers := make(http.Header)
-	headers.Set("Location", fmt.Sprintf("/v1/products/{%d}", product.ID))
+	headers.Set("Location", fmt.Sprintf("/v1/products/%d", product.ID))
 
 	err = app.writeJSON(w, http.StatusCreated, envelope{"product": product}, headers)
 	if err != nil {
@@ -82,7 +81,7 @@ func (app *application) createProductHandler(w http.ResponseWriter, r *http.Requ
 
 }
 
-func (app *application) showProductHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) getProductHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
@@ -90,17 +89,17 @@ func (app *application) showProductHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Get the authenticated user
-	// user := app.contextGetUser(r)
-	// if user.IsAnonymous() || user.ID == 0 {
-	// 	app.authenticationRequiredResponse(w, r)
-	// 	return
-	// }
-	// if !user.Activated {
-	// 	app.inactiveAccountResponse(w, r)
-	// 	return
-	// }
+	user := app.contextGetUser(r)
+	if user.IsAnonymous() || user.ID == 0 {
+		app.authenticationRequiredResponse(w, r)
+		return
+	}
+	if !user.Activated {
+		app.inactiveAccountResponse(w, r)
+		return
+	}
 
-	product, err := app.models.Products.Get(id, user.ID)
+	product, err := app.models.Products.Get(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -124,13 +123,7 @@ func (app *application) updateProductHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// user := app.contextGetUser(r)
-	// if user == nil {
-	// 	app.authenticationRequiredResponse(w, r)
-	// 	return
-	// }
-
-	product, err := app.models.Products.Get(id, user.ID)
+	product, err := app.models.Products.Get(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -138,6 +131,12 @@ func (app *application) updateProductHandler(w http.ResponseWriter, r *http.Requ
 		default:
 			app.serverErrorResponse(w, r, err)
 		}
+		return
+	}
+
+	user := app.contextGetUser(r)
+	if product.UserId != user.ID {
+		app.notPermittedResponse(w, r)
 		return
 	}
 
@@ -206,6 +205,28 @@ func (app *application) deleteProductHandler(w http.ResponseWriter, r *http.Requ
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
+		return
+	}
+
+	product, err := app.models.Products.Get(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	user := app.contextGetUser(r)
+	if product.UserId != user.ID {
+		app.notPermittedResponse(w, r)
+		return
+	}
+
+	if product.UserId != user.ID {
+		app.notPermittedResponse(w, r)
 		return
 	}
 

@@ -10,7 +10,6 @@ import (
 
 	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/data"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/jsonlog"
-	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/mailer"
 	_ "github.com/lib/pq"
 )
 
@@ -38,13 +37,6 @@ type config struct {
 		burst   int
 		enabled bool
 	}
-	smtp struct {
-		host     string
-		port     int
-		username string
-		password string
-		sender   string
-	}
 }
 
 // Define an application struct to hold the dependencies for our HTTP handlers, helpers,
@@ -54,7 +46,6 @@ type application struct {
 	config config
 	logger *jsonlog.Logger
 	models data.Models
-	mailer mailer.Mailer
 	wg     sync.WaitGroup
 }
 
@@ -64,10 +55,10 @@ func main() {
 	// Read the value of the port and env command-line flags into the config struct. We
 	// default to using the port number 4000 and the environment "development" if no
 	// corresponding flags are provided.
-	flag.IntVar(&cfg.port, "port", 4000, "API server port")
+	flag.IntVar(&cfg.port, "port", 5000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 
-	flag.StringVar(&cfg.db.dsn, "db-dsn", os.Getenv("FASHION_DB_DSN"), "PostgreSQL DSN")
+	flag.StringVar(&cfg.db.dsn, "db-dsn", os.Getenv("FASHION_PRODUCT_SERVICE"), "PostgreSQL DSN")
 
 	// Read the connection pool settings from command-line flags into the config struct.
 	// Notice the default values that we're using?
@@ -80,16 +71,6 @@ func main() {
 	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
 	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
-
-	// Read the SMTP server configuration settings into the config struct, using the
-	// Mailtrap settings as the default values. IMPORTANT: If you're following along,
-	// make sure to replace the default values for smtp-username and smtp-password
-	// with your own Mailtrap credentials.
-	flag.StringVar(&cfg.smtp.host, "smtp-host", "sandbox.smtp.mailtrap.io", "SMTP host")
-	flag.IntVar(&cfg.smtp.port, "smtp-port", 2525, "SMTP port")
-	flag.StringVar(&cfg.smtp.username, "smtp-username", "ade7bda6c9c382", "SMTP username")
-	flag.StringVar(&cfg.smtp.password, "smtp-password", "79b61b2090591d", "SMTP password")
-	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Fashion <pauloluwadamilare912@gamil.com>", "SMTP sender")
 
 	flag.Parse()
 	// Initialize a new logger which writes messages to the standard out stream,
@@ -113,7 +94,6 @@ func main() {
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
-		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
 	err = app.serve()

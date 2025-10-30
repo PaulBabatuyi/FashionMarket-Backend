@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  product-service:  # Changed from user-service
+    build: .
+    ports:
+      - "5000:5000"  # Different port
+    environment:
+      FASHIONPRODUCTS_DB_DSN: 
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: fashionproducts  # Different DB name
+    # ... rest same

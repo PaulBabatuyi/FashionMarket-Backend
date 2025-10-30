@@ -1,0 +1,2 @@
+-- Initial placeholder migration
+-- Required by golang-migrate to allow version 0
