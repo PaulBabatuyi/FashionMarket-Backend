@@ -1,0 +1,2 @@
+./internal/migrations/000002_seed_data_table.up
+.env

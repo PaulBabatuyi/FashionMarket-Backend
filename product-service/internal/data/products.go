@@ -16,61 +16,34 @@ type Product struct {
 	UserId      int64     `json:"user_id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
-	Price       Price     `json:"price,omitempty,string"`
+	Price       Price     `json:"price,string"`
 	ImageUrl    string    `json:"image_url"`
 	Stock       int32     `json:"stock"`
-	Category    []string  `json:"category,omitempty"`
-	CreatedAt   time.Time `json:"-"`
-	UpdatedAt   time.Time `json:"-"`
+	Category    []string  `json:"category"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 	Version     int32     `json:"version"`
 }
 
 func ValidateProduct(v *validator.Validator, product *Product) {
 	v.Check(product.Name != "", "name", "must be provided")
-	v.Check(len(product.Name) <= 500, "name", "must not be more than 500 bytes long")
-	v.Check(product.Price != 0, "price", "must be provided")
-	v.Check(product.Price >= 50, "price", "must be greater than %50")
-	v.Check(product.Stock != 0, "stock", "must be provided")
+	v.Check(len(product.Name) <= 255, "name", "must not exceed 255 characters")
+
 	v.Check(product.Description != "", "description", "must be provided")
-	v.Check(product.ImageUrl != "", "image", "must be provided")
-	v.Check(product.Category != nil, "Category", "must be provided")
-	v.Check(len(product.Category) >= 1, "Category", "must contain at least 1 Category")
-	v.Check(len(product.Category) <= 4, "Category", "available Category cloth are Men, Women, boy and girl ")
-	// Note that we're using the Unique helper in the line below to check that all
-	// values in the input.Category slice are unique.
-	v.Check(validator.Unique(product.Category), "Category", "must not contain duplicate values")
-	// Use the Valid() method to see if any of the checks failed. If they did, then use
+	v.Check(len(product.Description) <= 5000, "description", "must not exceed 5000 characters")
+
+	v.Check(product.Price > 0, "price", "must be greater than zero")
+	v.Check(product.Price < 1000000, "price", "must be less than 1,000,000")
+
+	v.Check(product.ImageUrl != "", "image_url", "must be provided")
+	v.Check(len(product.ImageUrl) <= 1000, "image_url", "must not exceed 1000 characters")
+
+	v.Check(product.Stock >= 0, "stock", "must be zero or greater")
+
+	v.Check(len(product.Category) > 0, "category", "must have at least one category")
+	v.Check(len(product.Category) <= 5, "category", "must not exceed 5 categories")
+	v.Check(validator.Unique(product.Category), "category", "must not contain duplicate values")
 }
-
-// func ValidateProductName(v *validator.Validator, name string) {
-//     v.Check(name != "", "name", "must be provided")
-//     v.Check(len(name) <= 255, "name", "must not be more than 255 characters long")
-// }
-
-// func ValidateDescription(v *validator.Validator, description string) {
-//     v.Check(description != "", "description", "must be provided")
-// }
-
-// func ValidatePrice(v *validator.Validator, price float64) {
-//     v.Check(price > 0, "price", "must be greater than 0")
-//     v.Check(price <= 999999.99, "price", "must not exceed 999999.99")
-// }
-
-// func ValidateImageURL(v *validator.Validator, imageURL string) {
-//     v.Check(imageURL != "", "image_url", "must be provided")
-//     v.Check(validator.Matches(imageURL, validator.URLRX), "image_url", "must be a valid URL")
-// }
-
-// func ValidateStock(v *validator.Validator, stock int32) {
-//     v.Check(stock >= 0, "stock", "must be non-negative")
-// }
-
-// func ValidateCategory(v *validator.Validator, category []string) {
-//     v.Check(len(category) > 0, "category", "must include at least one category")
-//     for _, cat := range category {
-//         v.Check(cat != "", "category", "must not contain empty values")
-//     }
-// }
 
 type ProductModel struct {
 	DB *sql.DB
@@ -81,7 +54,7 @@ func (m ProductModel) Insert(product *Product) error {
 	query := `
         INSERT INTO products (user_id, name, description, price, image_url, stock, category)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, user_id, created_at, updated_at, version`
+        RETURNING id, created_at, updated_at, version`
 
 	args := []interface{}{
 		product.UserId,
@@ -100,15 +73,15 @@ func (m ProductModel) Insert(product *Product) error {
 
 	return m.DB.QueryRowContext(ctx, query, args...).Scan(
 		&product.ID,
-		&product.UserId,
 		&product.CreatedAt,
 		&product.UpdatedAt,
 		&product.Version,
 	)
 }
 
+// if product.Stock <= 0 { return errOutOfStock }
 // Add a placeholder method for fetching a specific record from the movies table.
-func (m ProductModel) Get(id, user_id int64) (*Product, error) {
+func (m ProductModel) Get(id int64) (*Product, error) {
 	if id < 1 {
 		return nil, ErrRecordNotFound
 	}
@@ -116,7 +89,7 @@ func (m ProductModel) Get(id, user_id int64) (*Product, error) {
 	query := `
 	SELECT id, user_id, name, description, price, image_url, stock, category, created_at, updated_at, version 
 	FROM products
-	WHERE id = $1 AND user_id = $2`
+	WHERE id = $1`
 
 	var product Product
 
@@ -125,7 +98,7 @@ func (m ProductModel) Get(id, user_id int64) (*Product, error) {
 	// method returns.
 	defer cancel()
 
-	err := m.DB.QueryRowContext(ctx, query, id, user_id).Scan(
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&product.ID,
 		&product.UserId,
 		&product.Name,
@@ -156,9 +129,10 @@ func (m ProductModel) Update(product *Product) error {
 
 	query := `
 	UPDATE products
-	SET name = $1, description = $2, price = $3, image_url = $4, stock = $5, category = $6, updated_at = $7, version = version + 1
-	WHERE id = $8 AND user_id = $9 AND version = $10
-	RETURNING version`
+    SET name = $1, description = $2, price = $3, image_url = $4, 
+        stock = $5, category = $6, updated_at = NOW(), version = version + 1
+    WHERE id = $7 AND version = $8
+    RETURNING version`
 
 	args := []interface{}{
 		product.Name,
@@ -167,9 +141,7 @@ func (m ProductModel) Update(product *Product) error {
 		product.ImageUrl,
 		product.Stock,
 		pq.Array(product.Category),
-		product.UpdatedAt,
 		product.ID,
-		product.UserId,
 		product.Version,
 	}
 
@@ -177,7 +149,7 @@ func (m ProductModel) Update(product *Product) error {
 	defer cancel()
 
 	// Use QueryRowContext() and pass the context as the first argument.
-	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&product.Version)
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&product.Version, &product.UpdatedAt)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -222,9 +194,9 @@ func (m ProductModel) Delete(id int64) error {
 
 func (m ProductModel) GetAll(name string, category []string, filters Filters) ([]*Product, Metadata, error) {
 	query := fmt.Sprintf(`
-	SELECT count(*) OVER(), id, user_id, name, description, price, image_url, stock, category, created_at, updated_at, version
+	SELECT count(*) OVER(), id, name, description, price, image_url, stock, category, created_at, updated_at, version
 	FROM products
-	WHERE (to_tsvector('simple', name) @@ plainto_tsquery('simple', $1) OR $1 = '') 
+	WHERE (to_tsvector('english', name) @@ plainto_tsquery('english', $1) OR $1 = '') 
 	AND (array_length($2::text[], 1) IS NULL OR category && $2)
 	ORDER BY %s %s, id ASC
 	LIMIT $3 OFFSET $4`, filters.sortColumn(), filters.sortDirection())
@@ -250,7 +222,6 @@ func (m ProductModel) GetAll(name string, category []string, filters Filters) ([
 		err := rows.Scan(
 			&totalRecords,
 			&product.ID,
-			&product.UserId,
 			&product.Name,
 			&product.Description,
 			&product.Price,

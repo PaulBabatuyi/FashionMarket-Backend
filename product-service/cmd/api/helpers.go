@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/data"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/validator"
 	"github.com/go-chi/chi/v5"
 )
@@ -177,3 +178,10 @@ func (app *application) background(fn func()) {
 // 	message := "invalid or missing authentication token"
 // 	app.errorResponse(w, r, http.StatusUnauthorized, message)
 // }
+
+// // Add HTTP client method
+func (app *application) getUserFromUserService(token string) (*data.User, error) {
+	// Make HTTP call: GET http://user-service:4000/v1/auth/validate
+	// With Authorization: Bearer {token}
+	return nil, nil
+}
