@@ -3,10 +3,12 @@ package main
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/data"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/validator"
+	"github.com/pascaldekloe/jwt"
 )
 
 func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, r *http.Request) {
@@ -58,9 +60,25 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
-	// Otherwise, if the password is correct, we generate a new token with a 24-hour
-	// expiry time and the scope 'authentication'.
-	token, err := app.models.Tokens.New(user.ID, 24*time.Hour, data.ScopeAuthentication)
+	// // Otherwise, if the password is correct, we generate a new token with a 24-hour
+	// // expiry time and the scope 'authentication'.
+	// token, err := app.models.Tokens.New(user.ID, 24*time.Hour, data.ScopeAuthentication)
+	// if err != nil {
+	// 	app.serverErrorResponse(w, r, err)
+	// 	return
+	// }
+	var claims jwt.Claims
+	claims.Subject = strconv.FormatInt(user.ID, 10)
+	claims.Issued = jwt.NewNumericTime(time.Now())
+	claims.NotBefore = jwt.NewNumericTime(time.Now())
+	claims.Expires = jwt.NewNumericTime(time.Now().Add(24 * time.Hour))
+	claims.Issuer = "github.com/PaulBabatuyi/FashionMarket-Backend/user-service"
+	claims.Audiences = []string{"github.com/PaulBabatuyi/FashionMarket-Backend/user-service"}
+
+	// Sign the JWT claims using the HMAC-SHA256 algorithm and the secret key from the
+	// application config. This returns a []byte slice containing the JWT as a base64
+	// encoded string.
+	jwtBytes, err := claims.HMACSign(jwt.HS256, []byte(app.config.jwt.secret))
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -68,7 +86,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 
 	// Encode the token to JSON and send it in the response along with a 201 Created
 	// status code.
-	err = app.writeJSON(w, http.StatusCreated, envelope{"authentication token": token}, nil)
+	err = app.writeJSON(w, http.StatusCreated, envelope{"authentication token": string(jwtBytes)}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

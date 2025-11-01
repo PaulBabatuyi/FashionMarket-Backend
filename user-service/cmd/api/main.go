@@ -14,6 +14,7 @@ import (
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/data"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/jsonlog"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/mailer"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
@@ -51,6 +52,9 @@ type config struct {
 	cors struct {
 		trustedOrigins []string
 	}
+	jwt struct {
+		secret string
+	}
 }
 
 // Define an application struct to hold the dependencies for our HTTP handlers, helpers,
@@ -67,6 +71,7 @@ type application struct {
 func main() {
 	// Declare an instance of the config struct.
 	var cfg config
+	_ = godotenv.Load(".envrc")
 	// Read the value of the port and env command-line flags into the config struct. We
 	// default to using the port number 4000 and the environment "development" if no
 	// corresponding flags are provided.
@@ -107,6 +112,11 @@ func main() {
 		cfg.cors.trustedOrigins = strings.Fields(val)
 		return nil
 	})
+
+	// Parse the JWT signing secret from the command-line-flag. Notice that we leave the
+	// default value as the empty string if no flag is provided.
+	flag.StringVar(&cfg.jwt.secret, "jwt-secret", os.Getenv("JWT_SECRET"), "JWT secret")
+	// displayVersion := flag.Bool("version", false, "Display version and exit")
 
 	flag.Parse()
 	// Initialize a new logger which writes messages to the standard out stream,
