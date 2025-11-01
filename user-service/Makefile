@@ -14,17 +14,7 @@ build:
 	go build -o bin/user-service ./cmd/api
 
 run:
-	go run ./cmd/api
-
-test:
-	go test -v ./...
-
-docker-up:
-	docker-compose up --build -d
-
-docker-down:
-	docker-compose down
-
+	go run ./cmd/api -db-dsn=${FASHIONUSERS_DB_DSN} -jwt-secret=${JWT_SECRET}
 migrate-up:
 	migrate -path ./migrations -database "${FASHIONUSERS_DB_DSN}" up
 
