@@ -1,18 +1,29 @@
 version: '3.8'
-
 services:
-  product-service:  # Changed from user-service
-    build: .
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fashionmarket
     ports:
-      - "5000:5000"  # Different port
-    environment:
-      FASHIONPRODUCTS_DB_DSN: 
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-  postgres:
-    image: postgres:15-alpine
+  api:
+    build: .
+    depends_on:
+      - db
     environment:
-      POSTGRES_DB: fashionproducts  # Different DB name
-    # ... rest same
+      DB_DSN: postgres://postgres:postgres@db:5432/fashionmarket?sslmode=disable
+      JWT_PRIVATE_KEY: /keys/ec_private.pem
+      JWT_PUBLIC_KEY: /keys/ec_public.pem
+    volumes:
+      - ./ec_private.pem:/keys/ec_private.pem
+      - ./ec_public.pem:/keys/ec_public.pem
+    ports:
+      - "4000:4000"
+
+volumes:
+  postgres_data:

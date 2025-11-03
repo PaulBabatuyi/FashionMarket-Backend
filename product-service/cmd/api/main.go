@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"net/http"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/data"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/jsonlog"
+	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/jwt"
 	_ "github.com/lib/pq"
 )
 
@@ -37,16 +39,26 @@ type config struct {
 		burst   int
 		enabled bool
 	}
+	jwt struct {
+		publicKeyPath    string
+		expectedIssuer   string
+		expectedAudience string
+	}
+	userService struct {
+		url string // e.g., "http://user-service:4000"
+	}
 }
 
 // Define an application struct to hold the dependencies for our HTTP handlers, helpers,
 // and middleware. At the moment this only contains a copy of the config struct and a
 // logger, but it will grow to include a lot more as our build progresses.
 type application struct {
-	config config
-	logger *jsonlog.Logger
-	models data.Models
-	wg     sync.WaitGroup
+	config       config
+	logger       *jsonlog.Logger
+	models       data.Models
+	wg           sync.WaitGroup
+	jwtValidator *jwt.JWTValidator
+	httpClient   *http.Client
 }
 
 func main() {
@@ -72,6 +84,9 @@ func main() {
 	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
 
+	// User service config
+	flag.StringVar(&cfg.userService.url, "user-service-url", os.Getenv("USER_SERVICE_URL"), "User service URL")
+
 	flag.Parse()
 	// Initialize a new logger which writes messages to the standard out stream,
 	// prefixed with the current date and time.
@@ -88,12 +103,32 @@ func main() {
 	// established.
 	logger.PrintInfo("database connection pool established", nil)
 
+	// Initialize JWT validator
+	jwtValidator, err := jwt.NewJWTValidator(jwt.Config{
+		PublicKeyPath:    cfg.jwt.publicKeyPath,
+		ExpectedIssuer:   cfg.jwt.expectedIssuer,
+		ExpectedAudience: cfg.jwt.expectedAudience,
+	})
+	if err != nil {
+		logger.PrintFatal(err, map[string]string{
+			"component": "jwt_validator",
+		})
+	}
+	logger.PrintInfo("JWT validator initialized", nil)
+
+	// Create HTTP client for service-to-service calls
+	httpClient := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
 	// Declare an instance of the application struct, containing the config struct and
 	// the logger.
 	app := &application{
-		config: cfg,
-		logger: logger,
-		models: data.NewModels(db),
+		config:       cfg,
+		logger:       logger,
+		models:       data.NewModels(db),
+		jwtValidator: jwtValidator,
+		httpClient:   httpClient,
 	}
 
 	err = app.serve()

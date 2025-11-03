@@ -98,58 +98,54 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 
 func (app *application) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Add the "Vary: Authorization" header to the response. This indicates to any
-		// caches that the response may vary based on the value of the Authorization
-		// header in the request.
 		w.Header().Add("Vary", "Authorization")
 
-		// Retrieve the value of the Authorization header from the request. This will
-		// return the empty string "" if there is no such header found.
 		authorizationHeader := r.Header.Get("Authorization")
 
-		// If there is no Authorization header found, use the contextSetUser() helper
-		// that we just made to add the AnonymousUser to the request context. Then we
-		// call the next handler in the chain and return without executing any of the
-		// code below.
+		// No auth header = anonymous user
 		if authorizationHeader == "" {
 			r = app.contextSetUser(r, data.AnonymousUser)
 			next.ServeHTTP(w, r)
 			return
 		}
-		// Otherwise, we expect the value of the Authorization header to be in the format
-		// "Bearer <token>". We try to split this into its constituent parts, and if the
-		// header isn't in the expected format we return a 401 Unauthorized response
-		// using the invalidAuthenticationTokenResponse() helper (which we will create
-		// in a moment).
+
+		// Parse Bearer token
 		headerParts := strings.Split(authorizationHeader, " ")
 		if len(headerParts) != 2 || headerParts[0] != "Bearer" {
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
-		// Extract the actual authentication token from the header parts.
 		token := headerParts[1]
 
-		// Call user-service to validate token
-		user, err := app.getUserFromUserService(token) // HTTP call to user-service
+		// Validate JWT locally (fast, no network call)
+		validatedClaims, err := app.jwtValidator.Validate(token)
 		if err != nil {
+			app.logger.PrintError(err, map[string]string{
+				"token_validation": "failed",
+			})
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
 
-		// Call the contextSetUser() helper to add the user information to the request
-		// context.
+		// Now fetch the full user details
+		// OPTION 1: Call user-service HTTP endpoint
+		user, err := app.getUserFromUserService(validatedClaims.UserID)
+		if err != nil {
+			app.logger.PrintError(err, map[string]string{
+				"user_id": fmt.Sprintf("%d", validatedClaims.UserID),
+				"step":    "fetch_user_details",
+			})
+			// Return better error to client
+			app.errorResponse(w, r, http.StatusServiceUnavailable,
+				"user service temporarily unavailable")
+			return
+		}
+
+		// Add user to context
 		r = app.contextSetUser(r, user)
-		// Call the next handler in the chain.
 		next.ServeHTTP(w, r)
 	})
 }
-
-// // Add HTTP client method
-// func (app *application) getUserFromUserService(token string) (*data.User, error) {
-// 	// Make HTTP call: GET http://user-service:4000/v1/auth/validate
-// 	// With Authorization: Bearer {token}
-// 	return nil, nil
-// }
 
 // Create a new requireAuthenticatedUser() middleware to check that a user is not
 // anonymous.
