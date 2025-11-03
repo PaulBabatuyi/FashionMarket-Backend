@@ -13,7 +13,8 @@ import (
 
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/data"
 	"github.com/felixge/httpsnoop"
-	"github.com/pascaldekloe/jwt"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/exp/slices"
 	"golang.org/x/time/rate"
 )
 
@@ -132,27 +133,42 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 		}
 		// Extract the actual authentication token from the header parts.
 		token := headerParts[1]
-		claims, err := jwt.HMACCheck([]byte(token), []byte(app.config.jwt.secret))
-		if err != nil {
+
+		// Parse directly into RegisteredClaims
+		var claims jwt.RegisteredClaims
+		parsedToken, err := jwt.ParseWithClaims(token, &claims, func(t *jwt.Token) (interface{}, error) {
+			// Ensure the algorithm matches what we signed with
+			if t.Method.Alg() != app.jwtSigner.Algorithm() {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
+			// Provide public key for verification
+			return app.jwtSigner.PublicKey(), nil
+		}, jwt.WithValidMethods([]string{app.jwtSigner.Algorithm()}))
+		// Any parsing or validation error → reject
+		if err != nil || !parsedToken.Valid {
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
 
-		// Check if the JWT is still valid at this moment in time.
-		if !claims.Valid(time.Now()) {
+		// Manual checks (same as before)
+		now := time.Now()
+		if claims.ExpiresAt != nil && claims.ExpiresAt.Before(now) {
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
-		// Check that the issuer is our application.
+		if claims.NotBefore != nil && claims.NotBefore.After(now) {
+			app.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
 		if claims.Issuer != "github.com/PaulBabatuyi/FashionMarket-Backend/user-service" {
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
-		// Check that our application is in the expected audiences for the JWT.
-		if !claims.AcceptAudience("github.com/PaulBabatuyi/FashionMarket-Backend/user-service") {
+		if !slices.Contains(claims.Audience, "github.com/PaulBabatuyi/FashionMarket-Backend/*") {
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
+		// ... user lookup unchanged ...
 		// At this point, we know that the JWT is all OK and we can trust the data in
 		// it. We extract the user ID from the claims subject and convert it from a
 		// string into an int64.

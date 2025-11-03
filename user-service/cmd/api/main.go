@@ -14,8 +14,9 @@ import (
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/data"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/jsonlog"
 	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/mailer"
+	"github.com/PaulBabatuyi/FashionMarket-Backend/user-service/internal/pkg/jwt"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
 )
 
 // Declare a string containing the application version number. Later in the book we'll
@@ -53,7 +54,9 @@ type config struct {
 		trustedOrigins []string
 	}
 	jwt struct {
-		secret string
+		privateKeyPath string
+		publicKeyPath  string
+		algorithm      string
 	}
 }
 
@@ -61,11 +64,12 @@ type config struct {
 // and middleware. At the moment this only contains a copy of the config struct and a
 // logger, but it will grow to include a lot more as our build progresses.
 type application struct {
-	config config
-	logger *jsonlog.Logger
-	models data.Models
-	mailer mailer.Mailer
-	wg     sync.WaitGroup
+	config    config
+	logger    *jsonlog.Logger
+	models    data.Models
+	mailer    mailer.Mailer
+	wg        sync.WaitGroup
+	jwtSigner jwt.Signer
 }
 
 func main() {
@@ -113,9 +117,11 @@ func main() {
 		return nil
 	})
 
-	// Parse the JWT signing secret from the command-line-flag. Notice that we leave the
-	// default value as the empty string if no flag is provided.
-	flag.StringVar(&cfg.jwt.secret, "jwt-secret", os.Getenv("JWT_SECRET"), "JWT secret")
+	// Parse the JWT signing secret
+	flag.StringVar(&cfg.jwt.privateKeyPath, "jwt-private-key", os.Getenv("JWT_PRIVATE_KEY"), "path to ECDSA private key (PEM)")
+	flag.StringVar(&cfg.jwt.publicKeyPath, "jwt-public-key", os.Getenv("JWT_PUBLIC_KEY"), "path to ECDSA public key (PEM)")
+	flag.StringVar(&cfg.jwt.algorithm, "jwt-algorithm", "ES256", "JWT signing algorithm")
+
 	// displayVersion := flag.Bool("version", false, "Display version and exit")
 
 	flag.Parse()
@@ -151,13 +157,18 @@ func main() {
 		return time.Now().Unix()
 	}))
 
+	signer, err := jwt.NewECDSASigner(cfg.jwt.privateKeyPath, cfg.jwt.publicKeyPath, cfg.jwt.algorithm)
+	if err != nil {
+		logger.PrintFatal(err, nil)
+	}
 	// Declare an instance of the application struct, containing the config struct and
 	// the logger.
 	app := &application{
-		config: cfg,
-		logger: logger,
-		models: data.NewModels(db),
-		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		config:    cfg,
+		logger:    logger,
+		models:    data.NewModels(db),
+		mailer:    mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		jwtSigner: signer,
 	}
 
 	err = app.serve()
@@ -170,7 +181,7 @@ func main() {
 func openDB(cfg config) (*sql.DB, error) {
 	// Use sql.Open() to create an empty connection pool, using the DSN from the config
 	// struct.
-	db, err := sql.Open("postgres", cfg.db.dsn)
+	db, err := sql.Open("pgx", cfg.db.dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +208,7 @@ func openDB(cfg config) (*sql.DB, error) {
 	// error.
 	err = db.PingContext(ctx)
 	if err != nil {
+		db.Close()
 		return nil, err
 	}
 	// Return the sql.DB connection pool.

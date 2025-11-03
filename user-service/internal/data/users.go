@@ -26,7 +26,8 @@ type User struct {
 	Email     string    `json:"email"`
 	Password  password  `json:"-"`
 	Name      string    `json:"name"`
-	AvatarUrl string    `json:"avatar_url"`
+	Address   *string   `json:"address,omitempty"`
+	Country   *string   `json:"country,omitempty"`
 	Activated bool      `json:"activated"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -86,7 +87,7 @@ func (p *password) Matches(plaintextPassword string) (bool, error) {
 
 func (m UserModel) GetUserID(id int64) (*User, error) {
 	query := `
-        SELECT id, created_at, name, email, password_hash, activated, version
+        SELECT id, name, email, password_hash, address, country, created_at, activated, version
         FROM users
         WHERE id = $1`
 	var user User
@@ -94,10 +95,12 @@ func (m UserModel) GetUserID(id int64) (*User, error) {
 	defer cancel()
 	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
-		&user.CreatedAt,
 		&user.Name,
 		&user.Email,
 		&user.Password.hash,
+		&user.Address,
+		&user.Country,
+		&user.CreatedAt,
 		&user.Activated,
 		&user.Version,
 	)
@@ -118,11 +121,18 @@ func (m UserModel) GetUserID(id int64) (*User, error) {
 // that we did when creating a movie.
 func (m UserModel) Insert(user *User) error {
 	query := `
-	 INSERT INTO users (name, email, password_hash, avatar_url, activated)
-	 VALUES ($1, $2, $3, $4, $5)
+	 INSERT INTO users (name, email, password_hash, address, country, activated)
+	 VALUES ($1, $2, $3, $4, $5, $6)
 	 RETURNING id, created_at, updated_at, version`
 
-	args := []interface{}{user.Name, user.Email, user.Password.hash, user.AvatarUrl, user.Activated}
+	args := []interface{}{
+		user.Name,
+		user.Email,
+		user.Password.hash,
+		user.Address,
+		user.Country,
+		user.Activated,
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -148,7 +158,7 @@ func (m UserModel) Insert(user *User) error {
 // return one record (or none at all, in which case we return a ErrRecordNotFound error).
 func (m UserModel) GetByEmail(email string) (*User, error) {
 	query := `
-	SELECT id, name, email, password_hash, avatar_url, activated, created_at, updated_at, version
+	SELECT id, name, email, password_hash, address, country, activated, created_at, updated_at, version
 	FROM users
 	WHERE email = $1
 	`
@@ -162,7 +172,8 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 		&user.Name,
 		&user.Email,
 		&user.Password.hash,
-		&user.AvatarUrl,
+		&user.Address,
+		&user.Country,
 		&user.Activated,
 		&user.CreatedAt,
 		&user.UpdatedAt,
@@ -188,14 +199,16 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 func (m UserModel) Update(user *User) error {
 	query := `
 	UPDATE users
-	SET name = $1, email = $2, password_hash = $3, activated = $4, version = version + 1
-	WHERE id = $5 AND version = $6
+	SET name = $1, email = $2, password_hash = $3, address = $4, country = $5, activated = $6, version = version + 1
+	WHERE id = $7 AND version = $8
 	RETURNING version`
 
 	args := []interface{}{
 		user.Name,
 		user.Email,
 		user.Password.hash,
+		user.Address,
+		user.Country,
 		user.Activated,
 		user.ID,
 		user.Version,
@@ -225,7 +238,7 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 
 	// Set up the SQL query.
 	query := `
-       SELECT users.id, users.name, users.email, users.password_hash, users.avatar_url, users.activated, users.created_at, users.updated_at, users.version
+       SELECT users.id, users.name, users.email, users.password_hash, users.address, users.country, users.activated, users.created_at, users.updated_at, users.version
        FROM users
        INNER JOIN tokens
        ON users.id = tokens.user_id
@@ -251,7 +264,8 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 		&user.Name,
 		&user.Email,
 		&user.Password.hash,
-		&user.AvatarUrl,
+		&user.Address,
+		&user.Country,
 		&user.Activated,
 		&user.CreatedAt,
 		&user.UpdatedAt,

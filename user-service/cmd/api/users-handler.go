@@ -12,10 +12,11 @@ import (
 func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	// Create an anonymous struct to hold the expected data from the request body.
 	var input struct {
-		Name      string `json:"name"`
-		Email     string `json:"email"`
-		Password  string `json:"password"`
-		AvatarUrl string `json:"avatar_url"`
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Address  string `json:"address,omitempty"`
+		Country  string `json:"country,omitempty"`
 	}
 	// Parse the request body into the anonymous struct.
 	err := app.readJSON(w, r, &input)
@@ -30,7 +31,8 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	user := &data.User{
 		Name:      input.Name,
 		Email:     input.Email,
-		AvatarUrl: input.AvatarUrl,
+		Address:   &input.Address,
+		Country:   &input.Country,
 		Activated: false,
 	}
 	// Use the Password.Set() method to generate and store the hashed and plaintext
