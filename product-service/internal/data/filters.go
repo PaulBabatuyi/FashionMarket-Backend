@@ -22,16 +22,19 @@ func (f Filters) offset() int {
 	return (f.Page - 1) * f.PageSize
 }
 
-// Check that the client-provided Sort field matches one of the entries in our safelist
-// and if it does, extract the column name from the Sort field by stripping the leading
-// hyphen character (if one exists).
+var sortMap = map[string]string{
+	"id": "id", "-id": "id",
+	"name": "name", "-name": "name",
+	"price": "price", "-price": "price",
+	"created_at": "created_at", "-created_at": "created_at",
+}
+
 func (f Filters) sortColumn() string {
-	for _, safeValue := range f.SortSafelist {
-		if f.Sort == safeValue {
-			return strings.TrimPrefix(f.Sort, "-")
-		}
+	col, ok := sortMap[f.Sort]
+	if !ok {
+		return "id" // safe default
 	}
-	panic("unsafe sort parameter: " + f.Sort)
+	return col
 }
 
 // Return the sort direction ("ASC" or "DESC") depending on the prefix character of the

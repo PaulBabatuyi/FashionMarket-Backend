@@ -67,7 +67,7 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 	claims.NotBefore = jwt.NewNumericDate(time.Now())
 	claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(24 * time.Hour))
 	claims.Issuer = "github.com/PaulBabatuyi/FashionMarket-Backend/user-service"
-	claims.Audience = jwt.ClaimStrings{"github.com/PaulBabatuyi/FashionMarket-Backend/user-service"}
+	claims.Audience = jwt.ClaimStrings{"github.com/PaulBabatuyi/FashionMarket-Backend/*"}
 
 	// Sign the token using ECDSA private key
 	tokenString, err := app.jwtSigner.Sign(&claims)

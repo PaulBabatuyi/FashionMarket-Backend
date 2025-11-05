@@ -19,7 +19,7 @@ func (app *application) routes() http.Handler {
 
 	// Public routes
 	router.MethodFunc(http.MethodGet, "/v1/products", app.listProductHandler)
-	router.MethodFunc(http.MethodGet, "/v1/products/{id}", app.getProductHandler)
+	router.MethodFunc(http.MethodGet, "/v1/products/{id}", app.showProductHandler)
 
 	// Protected routes - require activated user
 	// app.requireActivatedUser()
@@ -30,6 +30,6 @@ func (app *application) routes() http.Handler {
 	//   router.Method(http.MethodGet, "/debug/vars", expvar.Handler())
 
 	// Return the Chi router, which implements http.Handler
-	//  return app.metrics(app.recoverPanic(app.enableCORS(app.rateLimit(app.authenticate(router)))))
-	return app.recoverPanic(app.rateLimit(app.authenticate(router)))
+	return app.metrics(app.recoverPanic(app.enableCORS(app.rateLimit(app.authenticate(router)))))
+	// return app.recoverPanic(app.rateLimit(app.authenticate(router)))
 }

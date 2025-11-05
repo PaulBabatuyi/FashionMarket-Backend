@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"expvar"
 	"flag"
+	"log"
 	"os"
 	"runtime"
 	"strings"
@@ -75,7 +76,9 @@ type application struct {
 func main() {
 	// Declare an instance of the config struct.
 	var cfg config
-	_ = godotenv.Load(".envrc")
+	if err := godotenv.Load(".envrc"); err != nil {
+		log.Println("no .envrc file found")
+	}
 	// Read the value of the port and env command-line flags into the config struct. We
 	// default to using the port number 4000 and the environment "development" if no
 	// corresponding flags are provided.

@@ -2,6 +2,8 @@ version: '3.8'
 services:
   db:
     image: postgres:16
+    networks:
+      - backend
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -13,6 +15,8 @@ services:
 
   api:
     build: .
+    networks:
+      - backend
     depends_on:
       - db
     environment:
@@ -24,6 +28,9 @@ services:
       - ./ec_public.pem:/keys/ec_public.pem
     ports:
       - "4000:4000"
+networks:
+  backend:
+    driver: bridge
 
 volumes:
   postgres_data:

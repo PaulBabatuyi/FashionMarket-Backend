@@ -11,3 +11,5 @@ CREATE TABLE users (
 );
 
 CREATE INDEX idx_users_email ON users(email);
+
+--CREATE EXTENSION IF NOT EXISTS citext;

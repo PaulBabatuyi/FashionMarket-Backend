@@ -28,15 +28,6 @@ func (app *application) createProductHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	user := app.contextGetUser(r)
-	// Get the authenticated user;  although a app.requireActivatedUser middleware will check for auth
-	if user.IsAnonymous() {
-		app.authenticationRequiredResponse(w, r)
-		return
-	}
-	if !user.Activated {
-		app.inactiveAccountResponse(w, r)
-		return
-	}
 
 	// Log user_id for debugging
 	// app.logger.PrintInfo("Creating product", map[string]string{
@@ -81,21 +72,10 @@ func (app *application) createProductHandler(w http.ResponseWriter, r *http.Requ
 
 }
 
-func (app *application) getProductHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) showProductHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
-		return
-	}
-
-	// Get the authenticated user
-	user := app.contextGetUser(r)
-	if user.IsAnonymous() || user.ID == 0 {
-		app.authenticationRequiredResponse(w, r)
-		return
-	}
-	if !user.Activated {
-		app.inactiveAccountResponse(w, r)
 		return
 	}
 

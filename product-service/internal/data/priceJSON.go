@@ -12,7 +12,7 @@ type Price float64
 
 func (p Price) MarshalJSON() ([]byte, error) {
 	// jsonValue := fmt.Sprintf("$%d", p) from int32 to float64
-	jsonValue := "$ " + strconv.FormatFloat(float64(p), 'f', -1, 64)
+	jsonValue := "$ " + strconv.FormatFloat(float64(p), 'f', -2, 64)
 	quotedJSONValue := strconv.Quote(jsonValue)
 	return []byte(quotedJSONValue), nil
 }

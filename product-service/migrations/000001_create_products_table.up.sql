@@ -22,3 +22,5 @@ CREATE INDEX idx_products_user_id ON products(user_id);
 CREATE INDEX idx_products_category ON products USING GIN(category);
 CREATE INDEX idx_products_created_at ON products(created_at);
 CREATE INDEX idx_products_tsv ON products USING GIN(tsv);
+--CREATE INDEX idx_products_category_created ON products USING GIN(category) 
+  --  WHERE created_at > NOW() - INTERVAL '30 days';  
