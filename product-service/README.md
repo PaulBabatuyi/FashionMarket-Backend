@@ -188,8 +188,7 @@ func (app *application) getUserFromUserService(token string) (*data.User, error)
 
 // ✅ KEEP: requireAuthenticatedUser (identical)
 // ✅ KEEP: requireActivatedUser (identical)
-// ⚠️ ADAPT: requirePermission (check "products:write" instead of "movies:read")
-```
+// ⚠️ ADAPT: requirePermission (check "products:write" 
 
 #### **cmd/api/routes.go** - Completely different routes
 ```go

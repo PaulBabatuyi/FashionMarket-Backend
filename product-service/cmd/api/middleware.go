@@ -131,8 +131,7 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 		}
 
 		// Now fetch the full user details
-		// OPTION 1: Call user-service HTTP endpoint
-		user, err := app.getUserFromUserService(validatedClaims.UserID)
+		user, err := app.getUserWithCache(validatedClaims.UserID)
 		if err != nil {
 			app.logger.PrintError(err, map[string]string{
 				"user_id": fmt.Sprintf("%d", validatedClaims.UserID),

@@ -49,7 +49,7 @@ type ProductModel struct {
 	DB *sql.DB
 }
 
-// Add a placeholder method for inserting a new record in the movies table.
+// Add a placeholder method for inserting a new record in the product table.
 func (m ProductModel) Insert(product *Product) error {
 	query := `
         INSERT INTO products (user_id, name, description, price, image_url, stock, category)
@@ -69,8 +69,6 @@ func (m ProductModel) Insert(product *Product) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// fmt.Printf("Query: %s\nArgs: %v\n", query, args) // Debug logging
-
 	return m.DB.QueryRowContext(ctx, query, args...).Scan(
 		&product.ID,
 		&product.CreatedAt,
@@ -80,7 +78,7 @@ func (m ProductModel) Insert(product *Product) error {
 }
 
 // if product.Stock <= 0 { return errOutOfStock }
-// Add a placeholder method for fetching a specific record from the movies table.
+// Add a placeholder method for fetching a specific record from the products table.
 func (m ProductModel) Get(id int64) (*Product, error) {
 	if id < 1 {
 		return nil, ErrRecordNotFound
@@ -124,7 +122,7 @@ func (m ProductModel) Get(id int64) (*Product, error) {
 	return &product, nil
 }
 
-// Add a placeholder method for updating a specific record in the movies table.
+// Add a placeholder method for updating a specific record in the products table.
 func (m ProductModel) Update(product *Product) error {
 
 	query := `
@@ -161,7 +159,7 @@ func (m ProductModel) Update(product *Product) error {
 	return nil
 }
 
-// Add a placeholder method for deleting a specific record from the movies table.
+// Add a placeholder method for deleting a specific record from the products table.
 func (m ProductModel) Delete(id int64) error {
 	if id < 1 {
 		return ErrRecordNotFound

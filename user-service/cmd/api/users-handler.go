@@ -65,7 +65,7 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// / Add the "movies:read" permission for the new user.
+	// / Add the "products:read" permission for the new user.
 	err = app.models.Permissions.AddForUser(user.ID, "products:read")
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
@@ -146,8 +146,6 @@ func (app *application) activateUserHandler(w http.ResponseWriter, r *http.Reque
 	// Update the user's activation status.
 	user.Activated = true
 
-	// Save the updated user record in our database, checking for any edit conflicts in
-	// the same way that we did for our movie records.
 	err = app.models.Users.Update(user)
 	if err != nil {
 		switch {

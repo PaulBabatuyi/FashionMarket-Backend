@@ -1,11 +1,8 @@
 package validator
 
 import (
+	"net/url"
 	"regexp"
-)
-
-var (
-	EmailRX = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 )
 
 type Validator struct {
@@ -44,6 +41,18 @@ func In(value string, list ...string) bool {
 	}
 	return false
 }
+
+func IsURL(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && u.Scheme != "" && u.Host != ""
+}
+
+// func IsURL(s string) bool {
+// 	// Full URL with optional scheme, www, path, query
+// 	pattern := `^(https?://)?([-\w]+\.)+[a-zA-Z]{2,}(:\d+)?(/[-\w()@:%_.~#?&//=]*)*$`
+// 	matched, _ := regexp.MatchString(pattern, s)
+// 	return matched
+// }
 
 // Matches returns true if a string value matches a specific regexp pattern.
 func Matches(value string, rx *regexp.Regexp) bool {

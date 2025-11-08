@@ -1,5 +1,4 @@
 .env.example
 ec_private.pem
 
-# Allow public key (safe)
 !ec_public.pem

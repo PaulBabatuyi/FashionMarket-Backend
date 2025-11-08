@@ -130,7 +130,7 @@ func main() {
 		Timeout: 5 * time.Second,
 	}
 
-	// Initialize user cache (THIS WAS MISSING!)
+	// Initialize user cache
 	userCache := cache.NewUserCache(cfg.cache.userTTL)
 	logger.PrintInfo("user cache initialized", map[string]string{
 		"ttl": cfg.cache.userTTL.String(),

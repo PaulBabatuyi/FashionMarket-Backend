@@ -1,16 +1,17 @@
 package main
 
 import (
-	"errors"
+	"expvar"
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/PaulBabatuyi/FashionMarket-Backend/internal/data"
-	"github.com/PaulBabatuyi/FashionMarket-Backend/internal/validator"
+	"github.com/PaulBabatuyi/FashionMarket-Backend/order-service/internal/data"
+	"github.com/felixge/httpsnoop"
 	"golang.org/x/time/rate"
 )
 
@@ -100,67 +101,50 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 
 func (app *application) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Add the "Vary: Authorization" header to the response. This indicates to any
-		// caches that the response may vary based on the value of the Authorization
-		// header in the request.
 		w.Header().Add("Vary", "Authorization")
 
-		// Retrieve the value of the Authorization header from the request. This will
-		// return the empty string "" if there is no such header found.
 		authorizationHeader := r.Header.Get("Authorization")
-		// If there is no Authorization header found, use the contextSetUser() helper
-		// that we just made to add the AnonymousUser to the request context. Then we
-		// call the next handler in the chain and return without executing any of the
-		// code below.
+
+		// No auth header = anonymous user
 		if authorizationHeader == "" {
 			r = app.contextSetUser(r, data.AnonymousUser)
 			next.ServeHTTP(w, r)
 			return
 		}
-		// Otherwise, we expect the value of the Authorization header to be in the format
-		// "Bearer <token>". We try to split this into its constituent parts, and if the
-		// header isn't in the expected format we return a 401 Unauthorized response
-		// using the invalidAuthenticationTokenResponse() helper (which we will create
-		// in a moment).
+
+		// Parse Bearer token
 		headerParts := strings.Split(authorizationHeader, " ")
 		if len(headerParts) != 2 || headerParts[0] != "Bearer" {
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
-		// Extract the actual authentication token from the header parts.
 		token := headerParts[1]
-		// Validate the token to make sure it is in a sensible format.
-		v := validator.New()
-		// If the token isn't valid, use the invalidAuthenticationTokenResponse()
-		// helper to send a response, rather than the failedValidationResponse() helper
-		// that we'd normally use.
-		if data.ValidateTokenPlaintext(v, token); !v.Valid() {
+
+		// Validate JWT locally (fast, no network call)
+		validatedClaims, err := app.jwtValidator.Validate(token)
+		if err != nil {
+			app.logger.PrintError(err, map[string]string{
+				"token_validation": "failed",
+			})
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
-		// Retrieve the details of the user associated with the authentication token,
-		// again calling the invalidAuthenticationTokenResponse() helper if no
-		// matching record was found. IMPORTANT: Notice that we are using
-		// ScopeAuthentication as the first parameter here.
-		user, err := app.models.Users.GetForToken(data.ScopeAuthentication, token)
+
+		// Now fetch the full user details
+		user, err := app.getUserWithCache(validatedClaims.UserID)
 		if err != nil {
-			switch {
-			case errors.Is(err, data.ErrRecordNotFound):
-				app.invalidAuthenticationTokenResponse(w, r)
-			default:
-				app.serverErrorResponse(w, r, err)
-			}
+			app.logger.PrintError(err, map[string]string{
+				"user_id": fmt.Sprintf("%d", validatedClaims.UserID),
+				"step":    "fetch_user_details",
+			})
+			// Return better error to client
+			app.errorResponse(w, r, http.StatusServiceUnavailable,
+				"user service temporarily unavailable")
 			return
 		}
-		//logger
-		app.logger.PrintInfo("Authenticating", map[string]string{
-			"token":   strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "),
-			"user_id": fmt.Sprintf("%d", user.ID),
-		})
-		// Call the contextSetUser() helper to add the user information to the request
-		// context.
+
+		// Add user to context
 		r = app.contextSetUser(r, user)
-		// Call the next handler in the chain.
 		next.ServeHTTP(w, r)
 	})
 }
@@ -205,95 +189,69 @@ func (app *application) requireActivatedUser(next http.HandlerFunc) http.Handler
 	return app.requireAuthenticatedUser(fn)
 }
 
-// Note that the first parameter for the middleware function is the permission code that
-// we require the user to have.
-func (app *application) requirePermission(code string, next http.HandlerFunc) http.HandlerFunc {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		// Retrieve the user from the request context.
-		user := app.contextGetUser(r)
-		// Get the slice of permissions for the user.
-		permissions, err := app.models.Permissions.GetAllForUser(user.ID)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
-			return
-		}
-		// Check if the slice includes the required permission. If it doesn't, then
-		// return a 403 Forbidden response.
-		if !permissions.Include(code) {
-			app.notPermittedResponse(w, r)
-			return
-		}
-		// Otherwise they have the required permission so we call the next handler in
-		// the chain.
-		next.ServeHTTP(w, r)
-	}
-	// Wrap this with the requireActivatedUser() middleware before returning it.
-	return app.requireActivatedUser(fn)
-}
-
 // if your code makes a decision about what to return based on the content of a request header,
 // you should include that header name in your Vary response header — even if the request
 // didn’t include that header
-// func (app *application) enableCORS(next http.Handler) http.Handler {
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		w.Header().Add("Vary", "Origin")
-// 		// Add the "Vary: Access-Control-Request-Method" header.
-// 		w.Header().Add("Vary", "Access-Control-Request-Method")
-// 		origin := r.Header.Get("Origin")
-// 		if origin != "" {
-// 			for i := range app.config.cors.trustedOrigins {
-// 				if origin == app.config.cors.trustedOrigins[i] {
-// 					w.Header().Set("Access-Control-Allow-Origin", origin)
-// 					// Check if the request has the HTTP method OPTIONS and contains the
-// 					// "Access-Control-Request-Method" header. If it does, then we treat
-// 					// it as a preflight request.
-// 					if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
-// 						// Set the necessary preflight response headers, as discussed
-// 						// previously.
-// 						w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, PUT, PATCH, DELETE")
-// 						w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-// 						// Write the headers along with a 200 OK status and return from
-// 						// the middleware with no further action.
-// 						w.WriteHeader(http.StatusOK)
-// 						return
-// 					}
-// 					break
-// 				}
-// 			}
-// 		}
-// 		next.ServeHTTP(w, r)
-// 	})
-// }
+func (app *application) enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Origin")
+		// Add the "Vary: Access-Control-Request-Method" header.
+		w.Header().Add("Vary", "Access-Control-Request-Method")
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			for i := range app.config.cors.trustedOrigins {
+				if origin == app.config.cors.trustedOrigins[i] {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					// Check if the request has the HTTP method OPTIONS and contains the
+					// "Access-Control-Request-Method" header. If it does, then we treat
+					// it as a preflight request.
+					if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+						// Set the necessary preflight response headers, as discussed
+						// previously.
+						w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, PUT, PATCH, DELETE")
+						w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+						// Write the headers along with a 200 OK status and return from
+						// the middleware with no further action.
+						w.WriteHeader(http.StatusOK)
+						return
+					}
+					break
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
-// func (app *application) metrics(next http.Handler) http.Handler {
-// 	// Initialize the new expvar variables when the middleware chain is first built
-// 	totalRequestsReceived := expvar.NewInt("total_requests_received")
-// 	totalResponsesSent := expvar.NewInt("total_responses_sent")
-// 	totalProcessingTimeMicroseconds := expvar.NewInt("total_processing_time_μs")
-// 	// Declare a new expvar map to hold the count of responses for each HTTP status
-// 	// code.
-// 	totalResponsesSentByStatus := expvar.NewMap("total_responses_sent_by_status")
+func (app *application) metrics(next http.Handler) http.Handler {
+	// Initialize the new expvar variables when the middleware chain is first built
+	totalRequestsReceived := expvar.NewInt("total_requests_received")
+	totalResponsesSent := expvar.NewInt("total_responses_sent")
+	totalProcessingTimeMicroseconds := expvar.NewInt("total_processing_time_μs")
+	// Declare a new expvar map to hold the count of responses for each HTTP status
+	// code.
+	totalResponsesSentByStatus := expvar.NewMap("total_responses_sent_by_status")
 
-// 	// The following code will be run for every request...
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		// Use the Add() method to increment the number of requests received by 1.
-// 		totalRequestsReceived.Add(1)
+	// The following code will be run for every request...
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Use the Add() method to increment the number of requests received by 1.
+		totalRequestsReceived.Add(1)
 
-// 		// Call the httpsnoop.CaptureMetrics() function, passing in the next handler in
-// 		// the chain along with the existing http.ResponseWriter and http.Request. This
-// 		// returns the metrics struct that we saw above.
-// 		metrics := httpsnoop.CaptureMetrics(next, w, r)
+		// Call the httpsnoop.CaptureMetrics() function, passing in the next handler in
+		// the chain along with the existing http.ResponseWriter and http.Request. This
+		// returns the metrics struct that we saw above.
+		metrics := httpsnoop.CaptureMetrics(next, w, r)
 
-// 		// On the way back up the middleware chain, increment the number of responses
-// 		// sent by 1
-// 		totalResponsesSent.Add(1)
+		// On the way back up the middleware chain, increment the number of responses
+		// sent by 1
+		totalResponsesSent.Add(1)
 
-// 		// Get the request processing time in microseconds from httpsnoop and increment
-// 		// the cumulative processing time.
-// 		totalProcessingTimeMicroseconds.Add(metrics.Duration.Microseconds())
-// 		// Use the Add() method to increment the count for the given status code by 1.
-// 		// Note that the expvar map is string-keyed, so we need to use the strconv.Itoa()
-// 		// function to convert the status code (which is an integer) to a string.
-// 		totalResponsesSentByStatus.Add(strconv.Itoa(metrics.Code), 1)
-// 	})
-// }
+		// Get the request processing time in microseconds from httpsnoop and increment
+		// the cumulative processing time.
+		totalProcessingTimeMicroseconds.Add(metrics.Duration.Microseconds())
+		// Use the Add() method to increment the count for the given status code by 1.
+		// Note that the expvar map is string-keyed, so we need to use the strconv.Itoa()
+		// function to convert the status code (which is an integer) to a string.
+		totalResponsesSentByStatus.Add(strconv.Itoa(metrics.Code), 1)
+	})
+}

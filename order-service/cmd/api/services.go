@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/PaulBabatuyi/FashionMarket-Backend/product-service/internal/data"
+	"github.com/PaulBabatuyi/FashionMarket-Backend/order-service/internal/data"
 )
 
 // getUserFromUserService fetches user details from the user-service.
@@ -68,7 +68,7 @@ func (app *application) getUserFromUserService(userID int64) (*data.User, error)
 	return user, nil
 }
 
-// Helper to create request contexts with timeout
+// Optional: Helper to create request contexts with timeout
 func (app *application) createRequestContext(timeout time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), timeout)
 }

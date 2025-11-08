@@ -10,15 +10,28 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/PaulBabatuyi/FashionMarket-Backend/internal/validator"
+	"github.com/PaulBabatuyi/FashionMarket-Backend/order-service/internal/validator"
 	"github.com/go-chi/chi/v5"
 )
 
-func (app *application) readIDParam(r *http.Request) (int64, error) {
+// func (app *application) readIDParam(r *http.Request) (int64, error) {
 
-	params := chi.URLParam(r, "id")
+// 	params := chi.URLParam(r, "id")
 
-	id, err := strconv.ParseInt(params, 10, 64)
+//		id, err := strconv.ParseInt(params, 10, 64)
+//		if err != nil || id < 1 {
+//			return 0, errors.New("invalid id parameter")
+//		}
+//		return id, nil
+//	}
+
+func (app *application) readIDParam(r *http.Request, name string) (int64, error) {
+	idStr := chi.URLParam(r, name)
+	if idStr == "" {
+		return 0, errors.New("missing id parameter")
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id < 1 {
 		return 0, errors.New("invalid id parameter")
 	}
