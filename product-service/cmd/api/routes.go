@@ -1,6 +1,7 @@
 package main
 
 import (
+	"expvar"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -27,9 +28,8 @@ func (app *application) routes() http.Handler {
 	router.MethodFunc(http.MethodPatch, "/v1/products/{id}", app.requireActivatedUser(app.updateProductHandler))
 	router.MethodFunc(http.MethodDelete, "/v1/products/{id}", app.requireActivatedUser(app.deleteProductHandler))
 
-	//   router.Method(http.MethodGet, "/debug/vars", expvar.Handler())
+	router.Method(http.MethodGet, "/debug/vars", expvar.Handler())
 
 	// Return the Chi router, which implements http.Handler
 	return app.metrics(app.recoverPanic(app.enableCORS(app.rateLimit(app.authenticate(router)))))
-	// return app.recoverPanic(app.rateLimit(app.authenticate(router)))
 }

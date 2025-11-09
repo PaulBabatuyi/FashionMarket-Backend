@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"net/http"
 	"os"
@@ -78,15 +79,12 @@ func main() {
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
 
 	// JWT config
-	// flag.StringVar(&cfg.jwt.publicKeyPath, "jwt-public-key", os.Getenv("JWT_PUBLIC_KEY"), "Path to JWT public key")
-	// flag.StringVar(&cfg.jwt.expectedIssuer, "jwt-issuer", "github.com/PaulBabatuyi/FashionMarket-Backend/user-service", "Expected JWT issuer")
-	// flag.StringVar(&cfg.jwt.expectedAudience, "jwt-audience", "github.com/PaulBabatuyi/FashionMarket-Backend/*", "Expected JWT audience")
+	flag.StringVar(&cfg.jwt.publicKeyPath, "jwt-public-key", os.Getenv("JWT_PUBLIC_KEY"), "Path to JWT public key")
+	flag.StringVar(&cfg.jwt.expectedIssuer, "jwt-issuer", "github.com/PaulBabatuyi/FashionMarket-Backend/user-service", "Expected JWT issuer")
+	flag.StringVar(&cfg.jwt.expectedAudience, "jwt-audience", "github.com/PaulBabatuyi/FashionMarket-Backend/*", "Expected JWT audience")
 
 	// User service config
-	// flag.StringVar(&cfg.userService.url, "user-service-url", os.Getenv("USER_SERVICE_URL"), "User service URL")
-	// if cfg.userService.url == "" {
-	// 	logger.PrintFatal(errors.New("USER_SERVICE_URL is required"), nil)
-	// }
+	flag.StringVar(&cfg.userService.url, "user-service-url", os.Getenv("USER_SERVICE_URL"), "User service URL")
 
 	// Cache config
 	flag.DurationVar(&cfg.cache.userTTL, "cache-user-ttl", 5*time.Minute, "User cache TTL")
@@ -102,6 +100,10 @@ func main() {
 
 	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
 
+	if cfg.userService.url == "" {
+		logger.PrintFatal(errors.New("USER_SERVICE_URL is required"), nil)
+	}
+
 	// Database connection
 	db, err := openDB(cfg)
 	if err != nil {
@@ -111,17 +113,17 @@ func main() {
 	logger.PrintInfo("database connection pool established", nil)
 
 	// // Initialize JWT validator
-	// jwtValidator, err := jwt.NewJWTValidator(jwt.Config{
-	// 	PublicKeyPath:    cfg.jwt.publicKeyPath,
-	// 	ExpectedIssuer:   cfg.jwt.expectedIssuer,
-	// 	ExpectedAudience: cfg.jwt.expectedAudience,
-	// })
-	// if err != nil {
-	// 	logger.PrintFatal(err, map[string]string{
-	// 		"component": "jwt_validator",
-	// 	})
-	// }
-	// logger.PrintInfo("JWT validator initialized", nil)
+	jwtValidator, err := jwt.NewJWTValidator(jwt.Config{
+		PublicKeyPath:    cfg.jwt.publicKeyPath,
+		ExpectedIssuer:   cfg.jwt.expectedIssuer,
+		ExpectedAudience: cfg.jwt.expectedAudience,
+	})
+	if err != nil {
+		logger.PrintFatal(err, map[string]string{
+			"component": "jwt_validator",
+		})
+	}
+	logger.PrintInfo("JWT validator initialized", nil)
 
 	// HTTP client for service-to-service calls
 	httpClient := &http.Client{
@@ -134,12 +136,12 @@ func main() {
 	})
 
 	app := &application{
-		config: cfg,
-		logger: logger,
-		models: data.NewModels(db),
-		// jwtValidator: jwtValidator,
-		httpClient: httpClient,
-		userCache:  userCache,
+		config:       cfg,
+		logger:       logger,
+		models:       data.NewModels(db),
+		jwtValidator: jwtValidator,
+		httpClient:   httpClient,
+		userCache:    userCache,
 	}
 
 	err = app.serve()
