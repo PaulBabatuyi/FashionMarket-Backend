@@ -1,0 +1,575 @@
+# Fashion Market Backend - Microservices Architecture
+
+A scalable e-commerce backend built with Go, featuring three independent microservices that communicate through JWT-based authentication and HTTP APIs.
+
+---
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Client / API Gateway                        │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+        ┌─────────────────────────┼─────────────────────────┐
+        │                         │                         │
+        ▼                         ▼                         ▼
+┌─────────────────┐      ┌──────────────────┐      ┌─────────────────┐
+│  User Service   │      │ Product Service  │      │  Order Service  │
+│  (Port 4000)    │      │   (Port 5000)    │      │   (Port 5001)   │
+└────────┬────────┘      └────────┬─────────┘      └────────┬────────┘
+         │                        │                          │
+         │                        │                          │
+    ┌────▼─────┐          ┌───────▼──────┐          ┌───────▼──────┐
+    │ PG DB 1  │          │   PG DB 2    │          │   PG DB 3    │
+    │  users   │          │  products    │          │   orders     │
+    │  5432    │          │    5433      │          │    5434      │
+    └──────────┘          └──────────────┘          └──────────────┘
+### Key Design Principles
+- **Service Independence**: Each service has its own database
+- **JWT Authentication**: ECDSA-signed tokens (ES256 algorithm)
+- **User Cache**: In-memory caching to reduce cross-service calls
+- **Shared Public Key**: Services validate JWTs locally before fetching user details
+
+---
+
+## 📦 Services
+
+### 1. **User Service** (Port 4000)
+**Responsibility**: Authentication, user management, and permission control
+
+**Features**:
+- User registration with email activation
+- JWT token generation (ECDSA ES256)
+- Password reset flow
+- Permission-based authorization
+- Email notifications (via SMTP)
+
+**Key Endpoints**:
+```
+POST   /v1/auth/register          # Register new user
+POST   /v1/auth/token             # Login (get JWT)
+PATCH  /v1/auth/activate          # Activate account
+POST   /v1/tokens/password-reset  # Request password reset
+PUT    /v1/users/password         # Reset password
+GET    /v1/users/{id}             # Get user details (for other services)
+GET    /v1/healthcheck            # Health status
+```
+
+**Database Tables**:
+- `users` - User accounts
+- `tokens` - Activation/password reset tokens
+- `permissions` - Permission codes
+- `users_permissions` - User-permission mapping
+
+---
+
+### 2. **Product Service** (Port 5000)
+**Responsibility**: Product catalog management
+
+**Features**:
+- CRUD operations for products
+- Full-text search (PostgreSQL tsvector)
+- Category filtering (array-based)
+- Owner-based authorization
+- User cache (5-minute TTL)
+
+**Key Endpoints**:
+```
+GET    /v1/products               # List products (with filters)
+POST   /v1/products               # Create product (auth required)
+GET    /v1/products/{id}          # Get product details
+PATCH  /v1/products/{id}          # Update product (owner only)
+DELETE /v1/products/{id}          # Delete product (owner only)
+GET    /v1/healthcheck            # Health status
+```
+
+**Database Tables**:
+- `products` - Product catalog with full-text search index
+
+**Query Examples**:
+```bash
+# Search products
+GET /v1/products?name=shirt&category=men&sort=-price&page=1&page_size=20
+
+# Filter by multiple categories
+GET /v1/products?category=women,unisex
+```
+
+---
+
+### 3. **Order Service** (Port 5001)
+**Responsibility**: Order and cart management
+
+**Features**:
+- Order creation with multiple items
+- Order status tracking
+- Shipping address management
+- Order item management (add/update/delete)
+- User cache (5-minute TTL)
+
+**Key Endpoints**:
+```
+POST   /v1/orders                      # Create order
+GET    /v1/orders/{id}                 # Get order details
+PATCH  /v1/orders/{id}                 # Update order status
+DELETE /v1/orders/{id}                 # Cancel order
+
+POST   /v1/orders/{orderID}/items      # Add item to order
+GET    /v1/orders/{orderID}/items/{id} # Get item details
+PATCH  /v1/orders/{orderID}/items/{id} # Update item quantity
+DELETE /v1/orders/{orderID}/items/{id} # Remove item from order
+
+GET    /v1/healthcheck                 # Health status
+```
+
+**Database Tables**:
+- `orders` - Order headers with JSONB shipping address
+- `order_items` - Order line items with auto-calculated subtotals
+
+**Order Statuses**:
+- `pending` → `paid` → `processing` → `shipped` → `delivered`
+- `cancelled` (can cancel anytime before delivered)
+
+---
+
+## 🔐 Authentication Flow
+
+### 1. User Registers
+```bash
+POST /v1/auth/register
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "SecurePass123"
+}
+```
+→ User receives activation email with token
+
+### 2. User Activates Account
+```bash
+PATCH /v1/auth/activate
+{
+  "token": "ABC123..."
+}
+```
+
+### 3. User Logs In
+```bash
+POST /v1/auth/token
+{
+  "email": "john@example.com",
+  "password": "SecurePass123"
+}
+```
+→ Returns JWT token
+
+### 4. User Makes Authenticated Request
+```bash
+POST /v1/products
+Authorization: Bearer <JWT_TOKEN>
+{
+  "name": "Blue Jeans",
+  "price": 49.99,
+  ...
+}
+```
+
+**Behind the Scenes**:
+1. Product Service validates JWT using shared public key
+2. Extracts `user_id` from JWT claims
+3. Checks cache for user details (5-minute TTL)
+4. If cache miss, calls User Service: `GET /v1/users/{id}`
+5. Caches result and authorizes request
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **Go 1.25+**
+- **PostgreSQL 15+**
+- **golang-migrate** (for database migrations)
+- **SMTP credentials** (for user service emails)
+
+---
+
+### 1. Clone Repository
+```bash
+git clone https://github.com/PaulBabatuyi/FashionMarket-Backend.git
+cd FashionMarket-Backend
+```
+
+---
+
+### 2. Generate JWT Keys (One-Time Setup)
+All services share the same public key for JWT validation.
+
+```bash
+# Generate ECDSA P-256 private key
+openssl ecparam -genkey -name prime256v1 -noout -out ec_private.pem
+
+# Extract public key
+openssl ec -in ec_private.pem -pubout -out ec_public.pem
+
+# Copy public key to all services
+cp ec_public.pem user-service/
+cp ec_public.pem product-service/
+cp ec_public.pem order-service/
+```
+
+---
+
+### 3. Setup User Service
+
+```bash
+cd user-service
+
+# Create environment file
+cat > .envrc << EOF
+export FASHIONUSERS_DB_DSN=postgres://fashionuser:pa55word@localhost:5432/fashionusers?sslmode=disable
+export SMTP_USERNAME=your_smtp_username
+export SMTP_PASSWORD=your_smtp_password
+export SMTP_SENDER="Fashion <noreply@fashion.com>"
+export JWT_PRIVATE_KEY=./ec_private.pem
+export JWT_PUBLIC_KEY=./ec_public.pem
+EOF
+
+# Load environment
+source .envrc
+
+# Run migrations
+migrate -path ./migrations -database "$FASHIONUSERS_DB_DSN" up
+
+# Start service
+go run ./cmd/api
+```
+
+**User Service Running**: `http://localhost:4000`
+
+---
+
+### 4. Setup Product Service
+
+```bash
+cd product-service
+
+# Create environment file
+cat > .envrc << EOF
+export FASHION_PRODUCT_SERVICE=postgres://productuser:pa55word@localhost:5432/fashionproducts?sslmode=disable
+export PORT=5000
+export ENV=development
+export JWT_PUBLIC_KEY=./ec_public.pem
+export USER_SERVICE_URL=http://localhost:4000
+EOF
+
+# Load environment
+source .envrc
+
+# Run migrations
+migrate -path ./migrations -database "$FASHION_PRODUCT_SERVICE" up
+
+# Start service
+go run ./cmd/api
+```
+
+**Product Service Running**: `http://localhost:5000`
+
+---
+
+### 5. Setup Order Service
+
+```bash
+cd order-service
+
+# Create environment file
+cat > .envrc << EOF
+export FASHION_ORDER_SERVICE=postgres://orderuser:pa55word@localhost:5432/fashionorders?sslmode=disable
+export PORT=5001
+export ENV=development
+export JWT_PUBLIC_KEY=./ec_public.pem
+export USER_SERVICE_URL=http://localhost:4000
+EOF
+
+# Load environment
+source .envrc
+
+# Run migrations
+migrate -path ./migrations -database "$FASHION_ORDER_SERVICE" up
+
+# Start service
+go run ./cmd/api
+```
+
+**Order Service Running**: `http://localhost:5001`
+
+---
+
+## 🧪 Testing the API
+
+### 1. Register User
+```bash
+curl -X POST http://localhost:4000/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Alice Smith",
+    "email": "alice@example.com",
+    "password": "SecurePass123",
+    "address": "123 Main St",
+    "country": "USA"
+  }'
+```
+
+### 2. Activate Account (check email for token)
+```bash
+curl -X PATCH http://localhost:4000/v1/auth/activate \
+  -H "Content-Type: application/json" \
+  -d '{"token": "ABC123..."}'
+```
+
+### 3. Login
+```bash
+curl -X POST http://localhost:4000/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "alice@example.com",
+    "password": "SecurePass123"
+  }'
+```
+→ Save the JWT token from response
+
+### 4. Create Product
+```bash
+curl -X POST http://localhost:5000/v1/products \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Blue Denim Jacket",
+    "description": "Classic blue denim jacket",
+    "price": "$ 79.99",
+    "image_url": "https://example.com/jacket.jpg",
+    "stock": 50,
+    "category": ["men", "outerwear"]
+  }'
+```
+
+### 5. Create Order
+```bash
+curl -X POST http://localhost:5001/v1/orders \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "total_amount": 79.99,
+    "currency": "USD",
+    "status": "pending",
+    "payment_status": "unpaid",
+    "shipping_address": {
+      "address": "123 Main St, Apt 4B",
+      "country": "USA"
+    },
+    "items": [{
+      "product_id": 1,
+      "product_name": "Blue Denim Jacket",
+      "unit_price": 79.99,
+      "quantity": 1
+    }]
+  }'
+```
+
+---
+
+## 📊 Database Schemas
+
+### User Service
+```sql
+users (id, email, password_hash, name, address, country, activated, created_at, updated_at, version)
+tokens (hash, user_id, expiry, scope, created_at)
+permissions (id, code)
+users_permissions (user_id, permission_id)
+```
+
+### Product Service
+```sql
+products (
+  id, user_id, name, description, price, image_url, stock,
+  category, created_at, updated_at, version,
+  tsv  -- Full-text search vector
+)
+```
+
+### Order Service
+```sql
+orders (
+  id, user_id, total_amount, currency, status, payment_status,
+  shipping_address, created_at, updated_at, version
+)
+
+order_items (
+  id, order_id, product_id, product_name, product_image_url,
+  unit_price, quantity, subtotal, created_at, updated_at
+)
+```
+
+---
+
+## 🛡️ Security Features
+
+- **JWT Tokens**: ECDSA ES256 algorithm (more secure than HMAC)
+- **Password Hashing**: bcrypt with cost factor 12
+- **Token Expiration**: 24-hour JWT expiry, 3-day activation tokens
+- **Rate Limiting**: 2 requests/second per IP by default
+- **CORS Protection**: Configurable trusted origins
+- **Input Validation**: Comprehensive request validation
+- **SQL Injection Prevention**: Parameterized queries
+- **User Cache Invalidation**: 5-minute TTL prevents stale data
+
+---
+
+## 🔧 Configuration
+
+### Common Flags (All Services)
+```bash
+-port=<PORT>                      # Server port
+-env=<ENV>                        # Environment (development/staging/production)
+-db-dsn=<DSN>                     # Database connection string
+-db-max-open-conns=25             # Max open connections
+-db-max-idle-conns=25             # Max idle connections
+-db-max-idle-time=15m             # Max idle time
+-limiter-rps=2                    # Rate limit requests/second
+-limiter-burst=4                  # Rate limit burst
+-limiter-enabled=true             # Enable rate limiting
+-cors-trusted-origins="<URLS>"    # Space-separated CORS origins
+```
+
+### User Service Specific
+```bash
+-jwt-private-key=<PATH>           # Path to ECDSA private key
+-jwt-public-key=<PATH>            # Path to ECDSA public key
+-smtp-host=<HOST>                 # SMTP server host
+-smtp-port=<PORT>                 # SMTP server port
+-smtp-username=<USERNAME>         # SMTP username
+-smtp-password=<PASSWORD>         # SMTP password
+-smtp-sender=<EMAIL>              # Sender email address
+```
+
+### Product/Order Service Specific
+```bash
+-jwt-public-key=<PATH>            # Path to ECDSA public key (verification only)
+-user-service-url=<URL>           # User service base URL
+-cache-user-ttl=5m                # User cache TTL
+```
+
+---
+
+## 📈 Monitoring
+
+### Health Checks
+```bash
+# User Service
+curl http://localhost:4000/v1/healthcheck
+
+# Product Service
+curl http://localhost:5000/v1/healthcheck
+
+# Order Service
+curl http://localhost:5001/v1/healthcheck
+```
+
+### Metrics (expvar)
+```bash
+# User Service
+curl http://localhost:4000/debug/vars
+
+# Product Service
+curl http://localhost:5000/debug/vars
+
+# Order Service
+curl http://localhost:5001/debug/vars
+```
+
+**Available Metrics**:
+- Total requests received
+- Total responses sent
+- Total processing time
+- Response count by status code
+- Active goroutines
+- Database connection pool stats
+
+---
+
+## 🐳 Docker Deployment
+
+Each service has a `Dockerfile` and `docker-compose.yaml`.
+
+### Build and Run All Services
+```bash
+# User Service
+cd user-service
+docker-compose up --build
+
+# Product Service
+cd product-service
+docker-compose up --build
+
+# Order Service
+cd order-service
+docker-compose up --build
+```
+
+---
+
+## 🔄 Service Communication Pattern
+
+```
+1. Client → Product Service: POST /v1/products (with JWT)
+2. Product Service: Validates JWT signature locally
+3. Product Service: Extracts user_id from JWT claims
+4. Product Service: Checks in-memory cache
+   └─ Cache hit? → Use cached user data
+   └─ Cache miss? → Call User Service
+5. Product Service → User Service: GET /v1/users/{id}
+6. User Service: Returns user details + permissions
+7. Product Service: Caches user data (5 min TTL)
+8. Product Service: Authorizes request
+9. Product Service: Creates product record
+10. Product Service → Client: Returns 201 Created
+```
+
+---
+
+## 🎯 Future Enhancements
+
+- [ ] API Gateway (Kong/Traefik)
+- [ ] Event-driven architecture (RabbitMQ/Kafka)
+- [ ] Redis for distributed caching
+- [ ] Elasticsearch for advanced product search
+- [ ] Payment service integration (Stripe/PayPal)
+- [ ] Inventory service (stock management)
+- [ ] Notification service (real-time updates)
+- [ ] GraphQL gateway
+- [ ] Kubernetes deployment manifests
+- [ ] OpenTelemetry tracing
+
+---
+
+## 📝 License
+
+MIT License - see LICENSE file for details
+
+---
+
+## 👥 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open Pull Request
+
+---
+
+## 📧 Contact
+
+**Author**: Paul Babatuyi  
+**GitHub**: [@PaulBabatuyi](https://github.com/PaulBabatuyi)
+
+---
+
+**Built with ❤️ using Go, PostgreSQL, and Microservices Architecture**
