@@ -125,7 +125,7 @@ func (o OrderModel) Get(id, user_id int64) (*Order, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := o.DB.QueryRowContext(ctx, query, id).Scan(
+	err := o.DB.QueryRowContext(ctx, query, id, user_id).Scan(
 		&order.ID,
 		&order.UserID,
 		&order.TotalAmount,
@@ -155,7 +155,6 @@ func (o OrderModel) Get(id, user_id int64) (*Order, error) {
 
 	return &order, nil
 }
-
 func (m OrderModel) GetAll(userID int64, filters Filters) ([]*Order, Metadata, error) {
 	query := fmt.Sprintf(`
         SELECT count(*) OVER(), id, user_id, total_amount, currency, status, payment_status,
@@ -244,7 +243,7 @@ func (o OrderModel) GetItems(orderID int64) ([]OrderItem, error) {
 			&item.Quantity,
 			&item.Subtotal,
 			&item.CreatedAt,
-			item.UpdatedAt,
+			&item.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -260,13 +259,12 @@ func (o OrderModel) GetItems(orderID int64) ([]OrderItem, error) {
 }
 
 func (o OrderModel) Update(order *Order) error {
-
 	query := `
 	UPDATE orders
     SET total_amount = $1, currency = $2, status = $3, payment_status = $4, 
         shipping_address = $5, updated_at = NOW(), version = version + 1
     WHERE id = $6 AND version = $7
-    RETURNING version, update_at`
+    RETURNING version, updated_at`
 
 	args := []interface{}{
 		order.TotalAmount,
@@ -281,7 +279,6 @@ func (o OrderModel) Update(order *Order) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// Use QueryRowContext() and pass the context as the first argument.
 	err := o.DB.QueryRowContext(ctx, query, args...).Scan(&order.Version, &order.UpdatedAt)
 	if err != nil {
 		switch {
@@ -293,7 +290,6 @@ func (o OrderModel) Update(order *Order) error {
 	}
 	return nil
 }
-
 func (o OrderModel) Delete(id int64) error {
 	if id < 1 {
 		return ErrRecordNotFound
