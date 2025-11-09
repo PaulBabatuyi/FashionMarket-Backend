@@ -31,8 +31,8 @@ type OrderItemModel struct {
 func (o OrderItemModel) Insert(item *OrderItem) error {
 	query := `
         INSERT INTO order_items (
-		 order_id, product_id, product_name, product_image_url, unit_price, quantity
-		 ) VALUES ($1, $2, $3, $4, $5, $6)
+		 order_id, product_id, product_name, product_image_url, unit_price, quantity, update_at
+		 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id, subtotal, created_at`
 
 	args := []interface{}{
@@ -42,6 +42,7 @@ func (o OrderItemModel) Insert(item *OrderItem) error {
 		item.ProductImageURL,
 		item.UnitPrice,
 		item.Quantity,
+		item.UpdatedAt,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -61,7 +62,7 @@ func (m OrderItemModel) Get(id, orderID, userID int64) (*OrderItem, error) {
 
 	query := `
         SELECT oi.id, oi.order_id, oi.product_id, oi.product_name, oi.product_image_url,
-               oi.unit_price, oi.quantity, oi.subtotal, oi.created_at, oi.updated_at
+               oi.unit_price, oi.quantity, oi.subtotal, oi.created_at, oi.updated_at,
                o.user_id
         FROM order_items oi
         JOIN orders o ON oi.order_id = o.id
@@ -104,13 +105,13 @@ func (o OrderItemModel) Update(item *OrderItem) error {
 	UPDATE order_items
     SET quantity = $1, update_at = NOW() 
     WHERE id = $2 AND subtotal = $3
-	RETURNING subtotal`
+	RETURNING subtotal, update_at`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	var newSubtotal float64
-	err := o.DB.QueryRowContext(ctx, query, item.Quantity, item.ID, item.Subtotal).Scan(item.Subtotal)
+	err := o.DB.QueryRowContext(ctx, query, item.Quantity, item.ID).Scan(item.Subtotal, item.UpdatedAt)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):

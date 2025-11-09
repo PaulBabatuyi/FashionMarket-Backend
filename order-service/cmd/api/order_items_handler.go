@@ -11,7 +11,7 @@ import (
 
 func (app *application) createOrderItemHandler(w http.ResponseWriter, r *http.Request) {
 
-	orderID, err := app.readIDParam(r, "id")
+	orderID, err := app.readIDParam(r, "order_id")
 	if err != nil || orderID < 1 {
 		app.notFoundResponse(w, r)
 		return
@@ -85,7 +85,7 @@ func (app *application) getOrderItemHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	orderID, err := app.readIDParam(r, "orderID")
+	orderID, err := app.readIDParam(r, "order_id")
 	if err != nil || orderID < 1 {
 		app.notFoundResponse(w, r)
 		return
@@ -124,7 +124,7 @@ func (app *application) updateOrderItemHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	orderID, err := app.readIDParam(r, "orderID")
+	orderID, err := app.readIDParam(r, "order_id")
 	if err != nil || orderID < 1 {
 		app.notFoundResponse(w, r)
 		return
@@ -194,7 +194,7 @@ func (app *application) deleteOrderItemHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	orderID, err := app.readIDParam(r, "orderID")
+	orderID, err := app.readIDParam(r, "order_id")
 	if err != nil || orderID < 1 {
 		app.notFoundResponse(w, r)
 		return

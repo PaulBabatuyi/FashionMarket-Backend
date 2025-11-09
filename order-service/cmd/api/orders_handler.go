@@ -232,3 +232,52 @@ func (app *application) deleteOrderHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 }
+
+func (app *application) listOrderHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		data.Filters
+	}
+
+	v := validator.New()
+	qs := r.URL.Query()
+
+	input.Page = app.readInt(qs, "page", 1, v)
+	input.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Sort = app.readString(qs, "sort", "id")
+	input.SortSafelist = []string{
+		"id", "-id",
+		"total_amount", "-total_amount",
+		"created_at", "-created_at",
+		"status", "-status",
+	}
+
+	data.ValidateFilters(v, input.Filters)
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	user := app.contextGetUser(r)
+	if user.IsAnonymous() {
+		app.authenticationRequiredResponse(w, r)
+		return
+	}
+	if !user.Activated {
+		app.inactiveAccountResponse(w, r)
+		return
+	}
+
+	orders, metadata, err := app.models.Orders.GetAll(user.ID, input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{
+		"orders":   orders,
+		"metadata": metadata,
+	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}

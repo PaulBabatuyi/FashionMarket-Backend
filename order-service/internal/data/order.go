@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/PaulBabatuyi/FashionMarket-Backend/order-service/internal/validator"
@@ -81,7 +82,6 @@ func (o OrderModel) Insert(order *Order) error {
 		return err
 	}
 
-	// 2. Insert items
 	for i := range order.Items {
 		order.Items[i].OrderID = order.ID
 		if err := o.insertItemTx(ctx, tx, &order.Items[i]); err != nil {
@@ -156,6 +156,66 @@ func (o OrderModel) Get(id, user_id int64) (*Order, error) {
 	return &order, nil
 }
 
+func (m OrderModel) GetAll(userID int64, filters Filters) ([]*Order, Metadata, error) {
+	query := fmt.Sprintf(`
+        SELECT count(*) OVER(), id, user_id, total_amount, currency, status, payment_status,
+               shipping_address, created_at, updated_at, version
+        FROM orders
+        WHERE user_id = $1
+        ORDER BY %s %s, id ASC
+        LIMIT $2 OFFSET $3`, filters.sortColumn(), filters.sortDirection())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	args := []interface{}{userID, filters.limit(), filters.offset()}
+
+	rows, err := m.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+	defer rows.Close()
+
+	var totalRecords int
+	orders := []*Order{}
+
+	for rows.Next() {
+		var o Order
+		err := rows.Scan(
+			&totalRecords,
+			&o.ID,
+			&o.UserID,
+			&o.TotalAmount,
+			&o.Currency,
+			&o.Status,
+			&o.PaymentStatus,
+			&o.ShippingAddress,
+			&o.CreatedAt,
+			&o.UpdatedAt,
+			&o.Version,
+		)
+		if err != nil {
+			return nil, Metadata{}, err
+		}
+
+		// Load items
+		items, err := m.GetItems(o.ID)
+		if err != nil {
+			return nil, Metadata{}, err
+		}
+		o.Items = items
+
+		orders = append(orders, &o)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, Metadata{}, err
+	}
+
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+	return orders, metadata, nil
+}
+
 func (o OrderModel) GetItems(orderID int64) ([]OrderItem, error) {
 	query := `
 		SELECT id, order_id, product_id, product_name, product_image_url, unit_price, quantity, subtotal, created_at		FROM order_items
@@ -184,6 +244,7 @@ func (o OrderModel) GetItems(orderID int64) ([]OrderItem, error) {
 			&item.Quantity,
 			&item.Subtotal,
 			&item.CreatedAt,
+			item.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
