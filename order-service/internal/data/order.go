@@ -217,7 +217,9 @@ func (m OrderModel) GetAll(userID int64, filters Filters) ([]*Order, Metadata, e
 
 func (o OrderModel) GetItems(orderID int64) ([]OrderItem, error) {
 	query := `
-		SELECT id, order_id, product_id, product_name, product_image_url, unit_price, quantity, subtotal, created_at		FROM order_items
+		SELECT id, order_id, product_id, product_name, product_image_url, unit_price,
+		 quantity, subtotal, created_at, updated_at		
+		FROM order_items
 		WHERE order_id = $1
 		ORDER BY id`
 
@@ -236,6 +238,7 @@ func (o OrderModel) GetItems(orderID int64) ([]OrderItem, error) {
 		var item OrderItem
 		err := rows.Scan(
 			&item.ID,
+			&item.OrderID,
 			&item.ProductID,
 			&item.ProductName,
 			&item.ProductImageURL,
