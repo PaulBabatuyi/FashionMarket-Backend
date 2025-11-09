@@ -6,7 +6,7 @@ services:
     ports:
       - "4000:4000"
     environment:
-      FASHIONUSERS_DB_DSN: postgres://fashionuser:fashionpass@postgres:5432/fashionusers?sslmode=disable
+      FASHIONUSERS_DB_DSN: postgres://:@postgres:5432/fashionusers?sslmode=disable
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_SENDER: ${SMTP_SENDER}
